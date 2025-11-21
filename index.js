@@ -55,31 +55,37 @@ const http = require("http");
 const { Server } = require("socket.io");
 const server = http.createServer(app);
 
-const io = new Server(server, {
-  cors: { origin: "*", credentials: true },
-  path: "/socket.io",
-});
-
-app.set("io", io);
-
-// Middleware
 // ===============================================
-// 🌐 CORS CONFIG (Production Ready)
+// 🌐 ALLOWED CORS ORIGINS (Production Ready)
 // ===============================================
 const allowedOrigins = [
   "http://localhost:3000",
   "http://percepto.sstpltech.com",
   "https://percepto.sstpltech.com",
   "https://www.percepto.sstpltech.com",
-  process.env.FRONTEND_URL,       // Optional for Render
+  process.env.FRONTEND_URL,
 ];
 
+// ===============================================
+// 🔵 SOCKET.IO CORS FIX
+// ===============================================
+const io = new Server(server, {
+  cors: {
+    origin: allowedOrigins,
+    credentials: true,
+  },
+  path: "/socket.io",
+});
+
+app.set("io", io);
+
+// ===============================================
+// 🌐 EXPRESS CORS FOR APIs
+// ===============================================
 app.use(
   cors({
     origin: function (origin, callback) {
-      // allow requests with no origin (e.g., mobile apps / curl / Postman)
-      if (!origin) return callback(null, true);
-
+      if (!origin) return callback(null, true); // mobile, postman etc.
       if (allowedOrigins.includes(origin)) {
         return callback(null, true);
       } else {
@@ -90,10 +96,15 @@ app.use(
   })
 );
 
+// ===============================================
+// 🔧 Body parser
+// ===============================================
 app.use(express.json());
 app.use(express.json({ limit: "10mb" }));
 
-// static files
+// ===============================================
+// 📂 STATIC FILES
+// ===============================================
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.use(
   "/uploads/demo-snapshots",
@@ -104,7 +115,9 @@ app.use(
   express.static(path.join(__dirname, "uploads/snapshots"))
 );
 
-// Sessions + Passport for Google Auth
+// ===============================================
+// 🔐 Sessions + Passport (Google Auth)
+// ===============================================
 app.use(
   session({
     secret: process.env.JWT_SECRET || "sstplsecret",
@@ -115,7 +128,25 @@ app.use(
 app.use(passport.initialize());
 app.use(passport.session());
 
-// ROUTES MOUNTING
+// ===============================================
+// 🚏 ROOT ROUTE (Fixes Cannot GET /)
+// ===============================================
+app.get("/", (req, res) => {
+  res.send(
+    "✅ SSTPL Percepto Backend is running. Use /health for status or /api/* for endpoints."
+  );
+});
+
+// ===============================================
+// 🚏 HEALTH CHECK
+// ===============================================
+app.get("/health", (_req, res) =>
+  res.json({ ok: true, time: new Date().toISOString() })
+);
+
+// ===============================================
+// 📌 ROUTES MOUNTING
+// ===============================================
 app.use("/api/feedbackauth", feedbackAuthRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api", candidateRoutes);
@@ -142,21 +173,23 @@ app.use("/api/questions", questionAPIRoute);
 
 app.use("/api/results", ResultAPIRoute);
 
-//  ⭐ DB Dump (FIXED)
-//app.use("/api/superadmin", dbDumpRoutes, verifyToken);
+// ⭐ DB Dump (optional)
+// app.use("/api/superadmin", dbDumpRoutes, verifyToken);
 
-// MongoDB connect + seed Super Admin & Admin
+// ===============================================
+// 🟢 MongoDB Connect + Auto Super Admin Seed
+// ===============================================
 mongoose
   .connect(process.env.MONGO_URL)
   .then(async () => {
     console.log("✅ MongoDB connected");
 
-    // 🔹 Seed Super Admin
     const existingSA = await User.findOne({ role: "superadmin" });
     if (!existingSA) {
       const email = "super@sstpl.com";
       const password = "Super@123";
       const hashed = await bcrypt.hash(password, 10);
+
       await User.create({
         name: "SSTPL Super Admin",
         email: email.toLowerCase(),
@@ -165,15 +198,15 @@ mongoose
         verified: true,
         status: "active",
       });
+
       console.log(`🔐 Seeded Super Admin: ${email} (password: ${password})`);
     }
   })
   .catch((err) => console.error("❌ MongoDB connection error:", err));
 
-app.get("/health", (_req, res) =>
-  res.json({ ok: true, time: new Date().toISOString() })
-);
-
+// ===============================================
+// 🚀 Start Server
+// ===============================================
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
