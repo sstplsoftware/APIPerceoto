@@ -269,16 +269,4 @@ router.get("/results/admin/:id/detail", verifyToken, isAdmin, async (req, res) =
   }
 });
 
-// DELETE /api/results/admin/:id
-router.delete("/admin/:id", verifyToken, requireAdmin, async (req, res) => {
-  try {
-    const { id } = req.params;
-    await Result.findByIdAndDelete(id);
-    return res.json({ success: true });
-  } catch (err) {
-    console.error("Delete result error:", err);
-    return res.status(500).json({ error: "Failed to delete result" });
-  }
-});
-
 module.exports = router;
