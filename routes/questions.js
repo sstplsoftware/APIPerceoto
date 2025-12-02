@@ -120,11 +120,12 @@ router.get("/questions/batch/:batchNumber", verifyToken, async (req, res) => {
     };
 
     const questions = realQuestions.map((q) => ({
-      _id: q._id,
-      sno: q.sno,
-      question: q.question,
-      options: q.options,
-    }));
+  _id: q._id,
+  sno: q.sno,
+  question: q.question,
+  options: q.options,
+  correctAnswer: q.correctAnswer,   // ✅ FIX ADDED
+}));
 
     res.json({ examInfo, questions });
   } catch (err) {
