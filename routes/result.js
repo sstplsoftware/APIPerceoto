@@ -269,5 +269,4 @@ router.get("/results/admin/:id/detail", verifyToken, isAdmin, async (req, res) =
   }
 });
 
-
 module.exports = router;
