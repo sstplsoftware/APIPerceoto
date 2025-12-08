@@ -13,6 +13,7 @@
   "type": "commonjs",
   "dependencies": {
     "@react-oauth/google": "^0.12.2",
+    "@sendgrid/mail": "^8.1.6",
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "dotenv": "^17.2.0",
