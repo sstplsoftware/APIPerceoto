@@ -59,7 +59,7 @@ const server = http.createServer(app);
 // 🌐 ALLOWED CORS ORIGINS (Production Ready)
 // ===============================================
 const allowedOrigins = [
-  "http://localhost:3000",
+  "http://localhost:5173",
   "http://percepto.sstpltech.com",
   "https://percepto.sstpltech.com",
   "https://www.percepto.sstpltech.com",
