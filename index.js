@@ -34,9 +34,8 @@ const demoRoutes = require("./routes/demoRoutes");
 const CourseAPIRoute = require("./routes/CourseAPIRoute");
 const SubjectAPIRoute = require("./routes/SubjectAPIRoute");
 const questionAPIRoute = require("./routes/QuestionAPIRoute");
-
-// ⭐ DB Dump Route
 const dbDumpRoutes = require("./routes/dbDump");
+// ⭐ DB Dump Route
 
 // assessment pre feed
 const ResultAPIRoute = require("./routes/ResultAPIRoute");
@@ -59,7 +58,7 @@ const server = http.createServer(app);
 // 🌐 ALLOWED CORS ORIGINS (Production Ready)
 // ===============================================
 const allowedOrigins = [
-  "http://localhost:3000",
+  "http://localhost:5173",
   "http://percepto.sstpltech.com",
   "https://percepto.sstpltech.com",
   "https://www.percepto.sstpltech.com",
@@ -157,6 +156,7 @@ app.use("/api", resultRoutes);
 app.use("/api", submitRoutes);
 app.use("/api", snapshotRoutes);
 app.use("/api/superadmin", superAdminRoutes);
+app.use("/api/superadmin", dbDumpRoutes);
 app.use("/api/demo", demoSetupRoutes);
 app.use("/api/demo-admin", demoAdminRoutes);
 app.use("/api/demo-auth", demoAuthRoutes);

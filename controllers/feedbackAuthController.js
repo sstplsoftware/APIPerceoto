@@ -46,7 +46,7 @@ const register = async (req, res) => {
             <img src="https://www.sstpltech.com/logo.png" alt="SSTPL Logo"
                  style="height:60px;object-fit:contain;margin-bottom:8px;" />
             <h1 style="color:#fff;font-size:24px;margin:10px 0 0;font-weight:600;">
-              Feedback Portal Verification
+             Percepto Portal Verification
             </h1>
           </div>
 
@@ -207,8 +207,6 @@ const resetPassword = async (req, res) => {
     res.status(400).json({ error: "Invalid or expired token" });
   }
 };
-
-
 
 // =====================================================
 // Exports
