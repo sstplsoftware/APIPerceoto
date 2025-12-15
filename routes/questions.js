@@ -11,7 +11,6 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 /* ============================================================
    ✅ UPLOAD QUESTIONS (EXCEL)
-   Supports batch-bound upload with creator tracking
 ============================================================ */
 router.post(
   "/questions/upload",
@@ -61,7 +60,7 @@ router.post(
 );
 
 /* ============================================================
-   ✅ DISTINCT BATCHES — merged (questions + candidates)
+   ✅ DISTINCT BATCHES
 ============================================================ */
 router.get("/questions/batches", verifyToken, async (req, res) => {
   try {
@@ -77,7 +76,10 @@ router.get("/questions/batches", verifyToken, async (req, res) => {
         : { role: "candidate", createdBy: req.user.id };
 
     const candidateBatches = await User.distinct("batchNumber", candidateQuery);
-    const allBatches = Array.from(new Set([...questionBatches, ...candidateBatches]));
+
+    const allBatches = Array.from(
+      new Set([...questionBatches, ...candidateBatches])
+    );
 
     res.json(allBatches);
   } catch (err) {
@@ -120,12 +122,12 @@ router.get("/questions/batch/:batchNumber", verifyToken, async (req, res) => {
     };
 
     const questions = realQuestions.map((q) => ({
-  _id: q._id,
-  sno: q.sno,
-  question: q.question,
-  options: q.options,
-  correctAnswer: q.correctAnswer,   // ✅ FIX ADDED
-}));
+      _id: q._id,
+      sno: q.sno,
+      question: q.question,
+      options: q.options,
+      correctAnswer: q.correctAnswer,
+    }));
 
     res.json({ examInfo, questions });
   } catch (err) {
@@ -135,7 +137,7 @@ router.get("/questions/batch/:batchNumber", verifyToken, async (req, res) => {
 });
 
 /* ============================================================
-   ✅ EXAM SCHEDULE CRUD (Scoped per Admin)
+   ✅ EXAM SCHEDULE CRUD
 ============================================================ */
 
 // ✅ LIST EXAMS
@@ -172,23 +174,87 @@ router.get("/exam/list", verifyToken, isAdmin, async (req, res) => {
   }
 });
 
-// ✅ CREATE SCHEDULE
+/* ============================================================
+   ✅ CANDIDATE EXAM TIME CHECK
+============================================================ */
+router.get("/exam/check/:batchNumber", verifyToken, async (req, res) => {
+  try {
+    const { batchNumber } = req.params;
+
+    const exam = await Question.findOne({ batchNumber });
+
+    if (!exam) {
+      return res.status(404).json({ error: "Exam not found" });
+    }
+
+    const { examDate, examTime, examDuration } = exam;
+
+    // 🔓 OPEN EXAM (no date & time)
+    if (!examDate || !examTime) {
+      return res.json({
+        allowed: true,
+        mode: "open",
+      });
+    }
+
+    // ⏱ SCHEDULED EXAM
+    const startTime = new Date(`${examDate} ${examTime}`).getTime();
+    const endTime = startTime + examDuration * 60 * 1000;
+    const now = Date.now();
+
+    if (now < startTime) {
+      return res.json({
+        allowed: false,
+        reason: "NOT_STARTED",
+        startTime,
+      });
+    }
+
+    if (now > endTime) {
+      return res.json({
+        allowed: false,
+        reason: "EXPIRED",
+      });
+    }
+
+    return res.json({
+      allowed: true,
+      mode: "scheduled",
+      endTime,
+    });
+  } catch (err) {
+    console.error("❌ Exam time check failed:", err);
+    res.status(500).json({ error: "Failed to check exam time" });
+  }
+});
+
+
+// ✅ CREATE SCHEDULE (DATE & TIME OPTIONAL, DURATION REQUIRED)
 router.post("/exam/schedule", verifyToken, isAdmin, async (req, res) => {
   try {
     const { batchName, examDate, examTime, duration } = req.body;
-    if (!batchName || !examDate || !examTime || !duration)
+
+    if (!batchName || !duration) {
       return res.status(400).json({
-        error: "All fields required (batchName, examDate, examTime, duration)",
+        error: "batchName and duration are required",
       });
+    }
 
     const filter =
       req.user.role === "superadmin"
         ? { batchNumber: batchName }
         : { batchNumber: batchName, createdBy: req.user.id };
 
-    const result = await Question.updateMany(filter, {
-      $set: { examDate, examTime, examDuration: Number(duration) },
-    });
+    const updateData = {
+      examDuration: Number(duration),
+    };
+
+    if (examDate && examTime) {
+      updateData.examDate = examDate;
+      updateData.examTime = examTime;
+    }
+
+    const result = await Question.updateMany(filter, { $set: updateData });
 
     if (result.matchedCount === 0) {
       await Question.create({
@@ -198,14 +264,12 @@ router.post("/exam/schedule", verifyToken, isAdmin, async (req, res) => {
         correctAnswer: "_",
         batchNumber: batchName,
         isPlaceholder: true,
-        examDate,
-        examTime,
-        examDuration: Number(duration),
+        ...updateData,
         createdBy: req.user.id,
       });
     }
 
-    res.json({ message: "Exam scheduled successfully" });
+    res.json({ message: "Exam saved successfully" });
   } catch (err) {
     console.error("❌ Schedule exam failed:", err);
     res.status(500).json({ error: "Failed to schedule exam" });
@@ -218,19 +282,24 @@ router.put("/exam/schedule/:batchName", verifyToken, isAdmin, async (req, res) =
     const { batchName } = req.params;
     const { examDate, examTime, duration } = req.body;
 
-    if (!examDate || !examTime || !duration)
+    if (!duration) {
       return res.status(400).json({
-        error: "All fields required (examDate, examTime, duration)",
+        error: "duration is required",
       });
+    }
 
     const filter =
       req.user.role === "superadmin"
         ? { batchNumber: batchName }
         : { batchNumber: batchName, createdBy: req.user.id };
 
-    await Question.updateMany(filter, {
-      $set: { examDate, examTime, examDuration: Number(duration) },
-    });
+    const updateData = {
+      examDuration: Number(duration),
+      examDate: examDate && examTime ? examDate : null,
+      examTime: examDate && examTime ? examTime : null,
+    };
+
+    await Question.updateMany(filter, { $set: updateData });
 
     res.json({ message: "Exam updated successfully" });
   } catch (err) {
@@ -239,7 +308,7 @@ router.put("/exam/schedule/:batchName", verifyToken, isAdmin, async (req, res) =
   }
 });
 
-// ✅ DELETE SCHEDULE
+// ✅ DELETE SCHEDULE (convert to OPEN exam)
 router.delete("/exam/schedule/:batchName", verifyToken, isAdmin, async (req, res) => {
   try {
     const { batchName } = req.params;
@@ -250,12 +319,12 @@ router.delete("/exam/schedule/:batchName", verifyToken, isAdmin, async (req, res
         : { batchNumber: batchName, createdBy: req.user.id };
 
     await Question.updateMany(filter, {
-      $unset: { examDate: "", examTime: "", examDuration: "" },
+      $unset: { examDate: "", examTime: "" },
     });
 
     await Question.deleteMany({ ...filter, isPlaceholder: true });
 
-    res.json({ message: "Exam schedule deleted" });
+    res.json({ message: "Exam schedule removed (open exam)" });
   } catch (err) {
     console.error("❌ Delete exam schedule failed:", err);
     res.status(500).json({ error: "Failed to delete exam" });
@@ -263,17 +332,18 @@ router.delete("/exam/schedule/:batchName", verifyToken, isAdmin, async (req, res
 });
 
 /* ============================================================
-   ✅ QUESTION EDIT / DELETE (Full CRUD)
+   ✅ QUESTION CRUD
 ============================================================ */
 
-// ✅ UPDATE QUESTION (Own Only)
 router.put("/questions/:id", verifyToken, isAdmin, async (req, res) => {
   try {
     const { sno, question, options, correctAnswer } = req.body;
+
     if (!question || !Array.isArray(options) || options.length < 2)
       return res.status(400).json({
         error: "Question and at least two options are required",
       });
+
     if (!options.includes(correctAnswer))
       return res.status(400).json({
         error: "Correct answer must match one of the options",
@@ -291,10 +361,12 @@ router.put("/questions/:id", verifyToken, isAdmin, async (req, res) => {
   }
 });
 
-// ✅ HARD DELETE QUESTION (Own Only)
 router.delete("/questions/:id", verifyToken, isAdmin, async (req, res) => {
   try {
-    await Question.findOneAndDelete({ _id: req.params.id, createdBy: req.user.id });
+    await Question.findOneAndDelete({
+      _id: req.params.id,
+      createdBy: req.user.id,
+    });
     res.json({ message: "Deleted" });
   } catch (err) {
     console.error("❌ Question delete failed:", err);

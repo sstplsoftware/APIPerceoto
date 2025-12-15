@@ -3,27 +3,38 @@ const router = express.Router();
 
 const { verifyToken } = require("../middleware/auth");
 
-// MODELS (ONLY those visible in your screenshot)
+// ===============================
+// MODELS (SAFE IMPORTS)
+// ===============================
 const User = require("../models/User");
-const Course = require("../models/CourseModel");
-const Subject = require("../models/SubjectModel");
-const Question = require("../models/Question");
-const QuestionBank = require("../models/QuestionBank");
-const Result = require("../models/Result");
-const ResultAPIModel = require("../models/ResultAPIModel");
-const ResultD = require("../models/ResultD");
-const Snapshot = require("../models/Snapshot");
-const DemoCandidate = require("../models/DemoCandidate.model");
-const DemoExamCandidate = require("../models/demoExamCandidate.model");
-const DemoExamQuestion = require("../models/demoExamQuestion.model");
-const DemoExamResult = require("../models/demoExamResult.model");
-const DemoRequest = require("../models/DemoRequest");
-const Candidate = require("../models/Candidate");
-const ExamSession = require("../models/ExamSession");
-const FeedbackUser = require("../models/FeedbackUserModel");
-const Admin = require("../models/Admin");
 
-// SUPERADMIN CHECK
+let Course, Subject, Question, QuestionBank;
+let Result, ResultAPIModel, ResultD;
+let Snapshot, DemoCandidate, DemoExamQuestion, DemoExamResult;
+let DemoRequest, ExamSession, FeedbackUser;
+
+try {
+  Course = require("../models/CourseModel");
+  Subject = require("../models/SubjectModel");
+  Question = require("../models/Question");
+  QuestionBank = require("../models/QuestionBank");
+  Result = require("../models/Result");
+  ResultAPIModel = require("../models/ResultAPIModel");
+  ResultD = require("../models/ResultD");
+  Snapshot = require("../models/Snapshot");
+  DemoCandidate = require("../models/DemoCandidate.model");
+  DemoExamQuestion = require("../models/demoExamQuestion.model");
+  DemoExamResult = require("../models/demoExamResult.model");
+  DemoRequest = require("../models/DemoRequest");
+  ExamSession = require("../models/ExamSession");
+  FeedbackUser = require("../models/FeedbackUserModel");
+} catch (err) {
+  console.warn("⚠️ Some optional DB models not loaded:", err.message);
+}
+
+// ===============================
+// SUPER ADMIN GUARD
+// ===============================
 const requireSuper = async (req, res, next) => {
   try {
     const u = await User.findById(req.user.id);
@@ -36,38 +47,57 @@ const requireSuper = async (req, res, next) => {
   }
 };
 
-// ========================================
-// 🔥 FULL DATABASE DUMP FOR SUPERADMIN
-// ========================================
+// ===============================
+// 🔥 FULL DATABASE DUMP (READ ONLY)
+// ===============================
 router.get("/db-dump", verifyToken, requireSuper, async (req, res) => {
   try {
     const data = {
-      users: await User.find().lean(),
-      admins: await Admin.find().lean(),
-      candidates: await Candidate.find().lean(),
-      demoCandidates: await DemoCandidate.find().lean(),
+      // 👤 USERS (single source of truth)
+      users: await User.find()
+        .select("-password -__v")
+        .lean(),
 
-      courses: await Course.find().lean(),
-      subjects: await Subject.find().lean(),
+      admins: await User.find({ role: "admin" })
+        .select("-password -__v")
+        .lean(),
 
-      questions: await Question.find().lean(),
-      questionBank: await QuestionBank.find().lean(),
-      demoExamQuestions: await DemoExamQuestion.find().lean(),
+      candidates: await User.find({ role: "candidate" })
+        .select("-password -__v")
+        .lean(),
 
-      results: await Result.find().lean(),
-      resultAPI: await ResultAPIModel.find().lean(),
-      resultD: await ResultD.find().lean(),
-      demoExamResults: await DemoExamResult.find().lean(),
+      demoCandidates: await User.find({ role: "demoadmin" })
+        .select("-password -__v")
+        .lean(),
 
-      snapshots: await Snapshot.find().lean(),
-      demoRequests: await DemoRequest.find().lean(),
-      examSessions: await ExamSession.find().lean(),
-      feedbackUsers: await FeedbackUser.find().lean(),
+      // 📚 ACADEMICS
+      courses: Course ? await Course.find().lean() : [],
+      subjects: Subject ? await Subject.find().lean() : [],
+
+      questions: Question ? await Question.find().lean() : [],
+      questionBank: QuestionBank ? await QuestionBank.find().lean() : [],
+      demoExamQuestions: DemoExamQuestion
+        ? await DemoExamQuestion.find().lean()
+        : [],
+
+      // 📊 RESULTS
+      results: Result ? await Result.find().lean() : [],
+      resultAPI: ResultAPIModel ? await ResultAPIModel.find().lean() : [],
+      resultD: ResultD ? await ResultD.find().lean() : [],
+      demoExamResults: DemoExamResult
+        ? await DemoExamResult.find().lean()
+        : [],
+
+      // 🛰 MONITORING & META
+      snapshots: Snapshot ? await Snapshot.find().lean() : [],
+      demoRequests: DemoRequest ? await DemoRequest.find().lean() : [],
+      examSessions: ExamSession ? await ExamSession.find().lean() : [],
+      feedbackUsers: FeedbackUser ? await FeedbackUser.find().lean() : [],
     };
 
     res.json(data);
   } catch (err) {
-    console.error("DB DUMP ERROR:", err);
+    console.error("❌ DB DUMP ERROR:", err);
     res.status(500).json({ error: "Failed to load DB dump" });
   }
 });
